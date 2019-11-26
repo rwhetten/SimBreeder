@@ -4,24 +4,22 @@
 #' @param num.chromos The number of chromosomes to simulate
 #' @param map.length The genetic map length in centi-morgans
 #' @param num.markers Number of markers that can be used for genomic selection or estimated relatedness
-#' @param total.loci The total number of loci to be placed on genetic map
 #' @param total.QTL The total number of QTL to place on the genetic map
 #' @param num.SNPQTL The number of total.QTL which will be SNPs
 #' @param map.dist Type of distance function to use in calculating recombination frequences.  Options are: "haldane" & "kosambi".  (Default = "haldane)
 #' @param chromosome.size.range The chromosome size range from the mean length of chromosomes (Default: 0.2)
 #' @param signif.digits The number of significant digits to use (Default: 2)
-#' @param het.markers logical. Should all markers used be fully heterozygous? (Default: FALSE)
 #' @param seed logical. Set seed so that genetic map is the same every time (Default: FALSE)
 #' @param save logical. Saves the output of genetic map (Default: FALSE)
 #' @keywords cat
 #' @export
 #' @examples
-#' create_genetic_map(num.chromos = 12, map.length = 1800, num.markers = 120, total.loci = signif((120+2500)/12,digits = 2)*12, total.QTL = 2500, num.SNPQTL = 1960)
+#' create_genetic_map(num.chromos = 12, map.length = 1800, num.markers = 120, total.QTL = 2500, num.SNPQTL = 1960)
 
 #Create Map Function####
 create_genetic_map <- function(num.chromos, map.length, num.markers, total.QTL, num.SNPQTL,
                                distribute.loci = NULL, marker.distribution =NULL,
-                               map.dist = "haldane", chromosome.size.range=.2, total.loci = NULL,
+                               map.dist = "haldane", chromosome.size.range=.2,
                                signif.digits=2, marker.maf=NULL, seed=F, save=F) {
 
   #Determine average length of a chromosome
@@ -35,10 +33,11 @@ create_genetic_map <- function(num.chromos, map.length, num.markers, total.QTL, 
   if(!is.null(total.loci)) {total.loci <- total.loci} else {total.loci <- sum(num.markers,total.QTL) }
 
   num.intervals <- total.loci - 1 #Specifying the number of intervals that will need to be calcuated
-  if(is.null(distribute.loci)) { loci.per.chromo <- round(rep(total.loci / num.chromos, num.chromos),digits = 0)} else if(distribute.loci == "list") {
+  if(is.null(distribute.loci)) { loci.per.chromo <- round(rep(total.loci / num.chromos, num.chromos),digits = 0)
+                               } else if(distribute.loci == "list") {
     loci.per.chromo <- loci.per.chromo
   } else if(distribute.loci == "even") {
-    loci.per.chromo <- rep(total.loci / num.chromos, num.chromos)#Each chromosome will get an equal number of loci
+    loci.per.chromo <- round(rep(total.loci / num.chromos, num.chromos),digits=0) #Each chromosome will get an equal number of loci
     }
 
   #Create Map and Recombination Frequencies####
@@ -76,7 +75,7 @@ create_genetic_map <- function(num.chromos, map.length, num.markers, total.QTL, 
   #Now sample from the map to specify SNPQTL & rQTL, the remainder are potential markers that can be used
   all.loci <- 1:total.loci  # vector that contains 1 through the number of all loci
 
-  #Sample 10 markers for each chromosome uniformly distributed####
+  #Sample an equal number of markers for each chromosome, uniformly distributed####
   #Specify the last loci for each chromosome
   chromo.loci.index <- vector("list")
   smp <- num.markers/num.chromos
@@ -90,16 +89,19 @@ create_genetic_map <- function(num.chromos, map.length, num.markers, total.QTL, 
   chromo.loci.index <- unlist(chromo.loci.index)
   last.pos.chrs <-  sapply(1:num.chromos,function(x){round(map$pos[chromo.loci.index[x]-1],0)})
   markers <- vector(); start <- 1
-  if(is.null(marker.distribution)) { markers <- sample(x = 1:nrow(map),size = num.markers,replace = F) } else if(marker.distribution == "equally-spaced"){
-    for(i in 1:num.chromos){
-    equal.dist.per.chr <- last.pos.chrs[i]/smp
-    map.posit <- map$pos[start:chromo.loci.index[i]]
-    marker <- sapply(1:smp,function(x){
-      the.pos <- equal.dist.per.chr*x
-      which.min(abs(round(map.posit - the.pos,1)))})
-    if(i > 1){marker <- marker + chromo.loci.index[i-1]}
-    markers <- c(markers,marker)
-    start <- chromo.loci.index[i] + 1} }
+  if(is.null(marker.distribution)) { markers <- sample(x = 1:nrow(map),size = num.markers,replace = F) 
+    } else if(marker.distribution == "equally-spaced"){
+      for(i in 1:num.chromos){
+        equal.dist.per.chr <- last.pos.chrs[i]/smp
+        map.posit <- map$pos[start:chromo.loci.index[i]]
+        marker <- sapply(1:smp,function(x){
+          the.pos <- equal.dist.per.chr*x
+          which.min(abs(round(map.posit - the.pos,1)))})
+          if(i > 1){marker <- marker + chromo.loci.index[i-1]}
+          markers <- c(markers,marker)
+          start <- chromo.loci.index[i] + 1
+        } 
+      }
 
   map$types[markers] <- "m"
   # Specify in map data frame that all loci which are not qtl or snpqtl are markers
@@ -111,15 +113,15 @@ create_genetic_map <- function(num.chromos, map.length, num.markers, total.QTL, 
   SNPQTL <- sample(all.loci[-markers],num.SNPQTL,replace=FALSE)
   SNPQTL.MAFs <- runif(num.SNPQTL,min=.01,max=.02)
   map$types[SNPQTL] <- "snpqtl"   # Specify in the map data frame that these loci are snpqtl
-  map$MAF[SNPQTL] <- SNPQTL.MAFs   # Assign these loci the specificed minor allele frequencies generated by user
+  map$MAF[SNPQTL] <- SNPQTL.MAFs   # Assign these loci the specified minor allele frequencies generated by user
 
 
   num.QTL <- total.QTL - num.SNPQTL  # vector that contains the number of QTL which will have slightly dominant effects
   rQTL <- sample(all.loci[-c(SNPQTL,markers)],num.QTL,replace=F)
   map$types[rQTL] <- "qtl"        # Specify in the map data frame that these loci are qtl
 
-  if(!is.null(marker.maf)){
-    map$MAF[which(map$types == "m")] <- .49}
+  #if(!is.null(marker.maf)){
+  #  map$MAF[which(map$types == "m")] <- .49}
 
   #Now save map output:
   datevalue <- date()
